@@ -47,6 +47,8 @@ import './features/toggle-files-button';
 import './features/scroll-to-top-on-collapse';
 import './features/fix-squash-and-merge-title';
 import './features/fix-squash-and-merge-message';
+import './features/fix-merge-title-and-message';
+import './features/add-jump-to-bottom-link';
 import './features/open-ci-details-in-new-tab';
 import './features/wait-for-build';
 import './features/hide-inactive-deployments';
