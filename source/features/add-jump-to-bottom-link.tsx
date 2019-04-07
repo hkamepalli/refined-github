@@ -1,3 +1,4 @@
+import React from 'dom-chef';
 import select from 'select-dom';
 import features from '../libs/features';
 
@@ -10,7 +11,7 @@ function addJumpToBottomLink() {
 
 	meta.append(
 		' · ',
-		//<a href="#partial-timeline" id="refined-github-jump-to-bottom-link">Jump to bottom</a>
+		<a href="#partial-timeline" id="refined-github-jump-to-bottom-link">Jump to bottom</a>
 	);
 }
 
