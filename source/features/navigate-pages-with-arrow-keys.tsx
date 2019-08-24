@@ -1,7 +1,7 @@
 import select from 'select-dom';
 import features from '../libs/features';
 
-function init() {
+function init(): void {
 	const createNextPageButton = select('a.next_page');
 	if (createNextPageButton) {
 		createNextPageButton.setAttribute('data-hotkey', 'ArrowRight');
@@ -14,7 +14,9 @@ function init() {
 }
 
 features.add({
-	id: 'navigate-pages-with-arrow-keys',
+	id: __featureName__,
+	description: 'Adds shortcuts to navigate through pages with pagination: `←` and `→`.',
+	screenshot: false,
 	load: features.onAjaxedPages,
 	shortcuts: {
 		'→': 'Go to the next page',

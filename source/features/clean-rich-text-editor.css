@@ -1,0 +1,6 @@
+/* Hide unnecessary comment toolbar items */
+md-mention,
+md-ref,
+markdown-toolbar > :nth-last-child(4) { /* H1, B, I */
+	display: none !important; /* Has to override `.d-inline-block` */
+}

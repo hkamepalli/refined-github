@@ -1,16 +1,15 @@
 import React from 'dom-chef';
 import select from 'select-dom';
 import onDomReady from 'dom-loaded';
-import OptionsSync from 'webext-options-sync';
+import elementReady from 'element-ready';
+import optionsStorage, {RGHOptions} from '../options-storage';
 import onNewComments from './on-new-comments';
+import onFileListUpdate from './on-file-list-update';
 import * as pageDetect from './page-detect';
-import {safeElementReady} from './dom-utils';
 
 type BooleanFunction = () => boolean;
 type VoidFunction = () => void;
 type callerFunction = (callback: VoidFunction) => void;
-type featureFunction = () => boolean | void;
-type featurePromisedFunction = () => Promise<boolean | void>;
 
 type FeatureShortcuts = Record<string, string>;
 
@@ -19,25 +18,21 @@ interface Shortcut {
 	description: string;
 }
 
-interface GlobalOptions {
-	disabledFeatures: string;
-	customCSS: string;
-	logging: boolean;
-	log?: (...args: unknown[]) => void;
-}
-
-interface FeatureDetails {
-	id: string;
+export interface FeatureDetails {
+	/**
+	If it's disabled, this should be the issue that explains why, as a reference
+	@example '#123'
+	*/
+	disabled?: string;
+	id: typeof __featureName__;
+	description: string | false;
+	screenshot: string | false;
 	include?: BooleanFunction[];
 	exclude?: BooleanFunction[];
-	init: featureFunction | featurePromisedFunction;
+	init: () => false | void | Promise<false | void>;
 	deinit?: () => void;
 	load?: callerFunction | Promise<void>;
 	shortcuts?: FeatureShortcuts;
-}
-
-interface PrivateFeatureDetails extends FeatureDetails {
-	options: GlobalOptions;
 }
 
 /*
@@ -46,15 +41,15 @@ interface PrivateFeatureDetails extends FeatureDetails {
  * For this reason `onAjaxedPages` will only call its callback when a *new* page is loaded.
  *
  * Alternatively, use `onAjaxedPagesRaw` if your callback needs to be called at every page
- * change (e.g. to "unmount" a feature / listener) regardless of of *newness* of the page.
+ * change (e.g. to "unmount" a feature / listener) regardless of *newness* of the page.
  */
-async function onAjaxedPagesRaw(callback: () => void) {
+async function onAjaxedPagesRaw(callback: () => void): Promise<void> {
 	await onDomReady;
 	document.addEventListener('pjax:end', callback);
 	callback();
 }
 
-function onAjaxedPages(callback: () => void) {
+function onAjaxedPages(callback: () => void): void {
 	onAjaxedPagesRaw(() => {
 		if (!select.exists('has-rgh')) {
 			callback();
@@ -75,18 +70,19 @@ onAjaxedPages(async () => {
 	}
 });
 
+let log: typeof console.log;
+
 // Rule assumes we don't want to leave it pending:
 // eslint-disable-next-line no-async-promise-executor
-const globalReady: Promise<GlobalOptions> = new Promise(async resolve => {
-	await safeElementReady('body');
+const globalReady: Promise<RGHOptions> = new Promise(async resolve => {
+	await elementReady('body');
 
 	if (pageDetect.is500()) {
 		return;
 	}
 
 	if (document.body.classList.contains('logged-out')) {
-		console.warn('%cRefined GitHub%c only works when you’re logged in to GitHub.', 'font-weight: bold', '');
-		return;
+		console.warn('%cRefined GitHub%c is only expected to work when you’re logged in to GitHub.', 'font-weight: bold', '');
 	}
 
 	if (select.exists('html.refined-github')) {
@@ -97,27 +93,22 @@ const globalReady: Promise<GlobalOptions> = new Promise(async resolve => {
 	document.documentElement.classList.add('refined-github');
 
 	// Options defaults
-	const options: GlobalOptions = {
-		disabledFeatures: '',
-		customCSS: '',
-		logging: false,
-		...await new OptionsSync().getAll()
-	};
+	const options = await optionsStorage.getAll();
 
 	if (options.customCSS.trim().length > 0) {
 		document.head.append(<style>{options.customCSS}</style>);
 	}
 
 	// Create logging function
-	options.log = options.logging ? console.log : () => {};
+	log = options.logging ? console.log : () => { };
 
 	resolve(options);
 });
 
-const run = async ({id, include, exclude, init, deinit, options: {log}}: PrivateFeatureDetails) => {
+const run = async ({id, include, exclude, init, deinit}: FeatureDetails): Promise<void> => {
 	// If every `include` is false and no exclude is true, don’t run the feature
-	if (include.every(c => !c()) || exclude.some(c => c())) {
-		return deinit();
+	if (include!.every(c => !c()) || exclude!.some(c => c())) {
+		return deinit!();
 	}
 
 	try {
@@ -131,37 +122,31 @@ const run = async ({id, include, exclude, init, deinit, options: {log}}: Private
 	}
 };
 
-const shortcutMap: Map<string, Shortcut> = new Map<string, Shortcut>();
-const getShortcuts: () => Shortcut[] = () => [...shortcutMap.values()];
+const shortcutMap = new Map<string, Shortcut>();
+const getShortcuts = (): Shortcut[] => [...shortcutMap.values()];
 
 /*
  * Register a new feature
  */
-const add = async (definition: FeatureDetails) => {
+const add = async (definition: FeatureDetails): Promise<void> => {
 	/* Input defaults and validation */
 	const {
 		id,
+		description,
+		screenshot,
 		include = [() => true], // Default: every page
 		exclude = [], // Default: nothing
-		load = fn => fn(), // Run it right away
+		load = (fn: VoidFunction) => fn(), // Run it right away
 		init,
 		deinit = () => {}, // Noop
 		shortcuts = {},
-		...invalidProps
+		disabled = false
 	} = definition;
-
-	if (Object.keys(invalidProps).length > 0) {
-		throw new Error(`${id} was added with invalid props: ${Object.keys(invalidProps).join(', ')}`);
-	}
-
-	if ([...include, ...exclude].some(d => typeof d !== 'function')) {
-		throw new TypeError(`${id}: include/exclude must be boolean-returning functions`);
-	}
 
 	/* Feature filtering and running */
 	const options = await globalReady;
-	if (options.disabledFeatures.includes(id)) {
-		options.log('↩️', 'Skipping', id);
+	if (disabled || options[`feature:${id}`] === false) {
+		log('↩️', 'Skipping', id, disabled ? `because of ${disabled}` : '');
 		return;
 	}
 
@@ -177,7 +162,7 @@ const add = async (definition: FeatureDetails) => {
 	}
 
 	// Initialize the feature using the specified loading mechanism
-	const details: PrivateFeatureDetails = {id, include, exclude, init, deinit, options};
+	const details: FeatureDetails = {id, description, screenshot, include, exclude, init, deinit};
 	if (load === onNewComments) {
 		details.init = async () => {
 			const result = await init();
@@ -185,12 +170,12 @@ const add = async (definition: FeatureDetails) => {
 			return result;
 		};
 
-		onAjaxedPages(() => run(details));
+		onAjaxedPages(async () => run(details));
 	} else if (load instanceof Promise) {
 		await load;
 		run(details);
 	} else {
-		load(() => run(details));
+		load(async () => run(details));
 	}
 };
 
@@ -202,6 +187,7 @@ export default {
 	// Loading mechanisms
 	onDomReady,
 	onNewComments,
+	onFileListUpdate,
 	onAjaxedPages,
 	onAjaxedPagesRaw,
 

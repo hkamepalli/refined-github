@@ -1,20 +1,4 @@
 import select from 'select-dom';
-import domLoaded from 'dom-loaded';
-import elementReady from 'element-ready';
-
-/*
- * Automatically stops checking for an element to appear once the DOM is ready.
- */
-export const safeElementReady = (selector: string) => {
-	const waiting = elementReady(selector);
-
-	// Don't check ad-infinitum
-	// eslint-disable-next-line promise/prefer-await-to-then
-	domLoaded.then(() => requestAnimationFrame(() => waiting.cancel()));
-
-	// If cancelled, return null like a regular select() would
-	return waiting.catch(() => null);
-};
 
 /**
  * Append to an element, but before a element that might not exist.
@@ -38,9 +22,9 @@ export const safeElementReady = (selector: string) => {
  *   <nope/>
  * </parent>
  */
-export const appendBefore = (parent: string|Element, before: string, child: Element) => {
+export const appendBefore = (parent: string|Element, before: string, child: Element): void => {
 	if (typeof parent === 'string') {
-		parent = select(parent);
+		parent = select(parent)!;
 	}
 
 	// Select direct children only
@@ -52,12 +36,31 @@ export const appendBefore = (parent: string|Element, before: string, child: Elem
 	}
 };
 
-export const wrap = (target: Element, wrapper: Element) => {
+export const wrap = (target: Element | ChildNode, wrapper: Element): void => {
 	target.before(wrapper);
 	wrapper.append(target);
 };
 
-export const wrapAll = (targets: Element[], wrapper: Element) => {
+export const wrapAll = (targets: Array<Element | ChildNode>, wrapper: Element): void => {
 	targets[0].before(wrapper);
 	wrapper.append(...targets);
 };
+
+export const isEditable = (node: unknown): boolean => {
+	return node instanceof HTMLTextAreaElement ||
+		node instanceof HTMLInputElement ||
+		(node instanceof HTMLElement && node.isContentEditable);
+};
+
+export async function elementFinder<T extends HTMLElement = HTMLElement>(selector: string, frequency: number): Promise<T> {
+	return new Promise(resolve => {
+		(function loop() {
+			const element = select<T>(selector);
+			if (element) {
+				resolve(element);
+			} else {
+				setTimeout(loop, frequency);
+			}
+		})();
+	});
+}

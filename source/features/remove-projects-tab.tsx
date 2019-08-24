@@ -1,14 +1,8 @@
-/*
-The `Projects` tab is hidden from repositories and profiles when there are no projects
-
-New projects can still be created via the [`Create new…` menu](https://user-images.githubusercontent.com/1402241/34909214-18b6fb2e-f8cf-11e7-8556-bed748596d3b.png).
-*/
-
 import React from 'dom-chef';
 import select from 'select-dom';
 import onetime from 'onetime';
+import elementReady from 'element-ready';
 import features from '../libs/features';
-import {safeElementReady} from '../libs/dom-utils';
 import {isUserProfile, isOwnOrganizationProfile, isOrganizationProfile} from '../libs/page-detect';
 
 const addNewProjectLink = onetime(() => {
@@ -31,15 +25,15 @@ const addNewProjectLink = onetime(() => {
 	// https://github.com/USER/REPO/projects/new
 	const path = location.pathname.split('/', 3);
 	const base = path.length > 2 ? path.join('/') : '/orgs' + path.join('/');
-	select('.HeaderMenu [href="/new"]').parentElement.append(
-		<a class="dropdown-item" href={base + '/projects/new'}>
+	select('.Header [href="/new"]')!.parentElement!.append(
+		<a className="dropdown-item" href={base + '/projects/new'}>
 			New project
 		</a>
 	);
 });
 
-async function init() {
-	await safeElementReady(`
+async function init(): Promise<false | void> {
+	await elementReady(`
 		.orghead + *,
 		.repohead + *,
 		.user-profile-nav + *
@@ -67,13 +61,15 @@ async function init() {
 	}
 
 	// Only remove the tab if it's not the current page and if it has 0 projects
-	if (!projectsTab.matches('.selected') && select('.Counter', projectsTab).textContent.trim() === '0') {
+	if (!projectsTab.matches('.selected') && select('.Counter', projectsTab)!.textContent!.trim() === '0') {
 		projectsTab.remove();
 	}
 }
 
 features.add({
-	id: 'remove-projects-tab',
+	id: __featureName__,
+	description: 'Hides the `Projects` tab from repositories and profiles when it’s empty. New projects can still be created via the `Create new…` menu.',
+	screenshot: 'https://user-images.githubusercontent.com/1402241/34909214-18b6fb2e-f8cf-11e7-8556-bed748596d3b.png',
 	include: [
 		features.isRepo,
 		features.isUserProfile,

@@ -1,29 +1,45 @@
-/*
-Head and base branches are added to the PR list when they are significant.
-
-The base branch is added when it's not the repo's default branch.
-The head branch is added when it's from the same repo or the PR is by the current user.
-*/
-
 import React from 'dom-chef';
 import select from 'select-dom';
 import * as api from '../libs/api';
 import features from '../libs/features';
 import getDefaultBranch from '../libs/get-default-branch';
-import {getOwnerAndRepo} from '../libs/utils';
+import {getOwnerAndRepo, getRepoGQL} from '../libs/utils';
 import {openPullRequest} from '../libs/icons';
 
-function normalizeBranchInfo(data) {
+type RepositoryReference = {
+	owner: string;
+	branchExists: boolean;
+	url?: string;
+	label: string;
+};
+
+type BranchInfo = {
+	baseRef: string;
+	baseRefName: string;
+	headRef: string;
+	headOwner: {
+		login: string;
+	};
+	headRefName: string;
+	headRepository: {
+		url: string;
+	};
+};
+
+function normalizeBranchInfo(data: BranchInfo): {
+	base?: RepositoryReference;
+	head?: RepositoryReference;
+} {
 	const {ownerName, repoName} = getOwnerAndRepo();
 
-	const base: AnyObject = {};
+	const base: Partial<RepositoryReference> = {};
 	base.branchExists = Boolean(data.baseRef);
 	base.label = data.baseRefName;
 	if (base.branchExists) {
 		base.url = `/${ownerName}/${repoName}/tree/${data.baseRefName}`;
 	}
 
-	const head: AnyObject = {};
+	const head: Partial<RepositoryReference> = {};
 	head.branchExists = Boolean(data.headRef);
 	head.owner = data.headOwner.login;
 	if (!data.headOwner || data.headOwner.login === ownerName) {
@@ -38,16 +54,17 @@ function normalizeBranchInfo(data) {
 		head.url = data.headRepository.url;
 	}
 
-	return {base, head};
+	return {
+		base: base as RepositoryReference,
+		head: head as RepositoryReference
+	};
 }
 
-function buildQuery(numbers) {
-	const {ownerName, repoName} = getOwnerAndRepo();
-
-	return `{
-		repository(owner: "${ownerName}", name: "${repoName}") {
-			${numbers.map(number => `
-				${number}: pullRequest(number: ${number.replace('issue_', '')}) {
+function buildQuery(issueIds: string[]): string {
+	return `
+		repository(${getRepoGQL()}) {
+			${issueIds.map(id => `
+				${id}: pullRequest(number: ${id.replace('issue_', '')}) {
 					baseRef {id}
 					headRef {id}
 					baseRefName
@@ -57,26 +74,26 @@ function buildQuery(numbers) {
 				}
 			`)}
 		}
-	}`;
+	`;
 }
 
-function createLink(ref) {
+function createLink(ref: RepositoryReference): HTMLSpanElement {
 	return (
 		<span
-			class="commit-ref css-truncate user-select-contain mb-n1"
-			style={(ref.branchExists ? {} : {'text-decoration': 'line-through'})}>
+			className="commit-ref css-truncate user-select-contain mb-n1"
+			style={(ref.branchExists ? {} : {textDecoration: 'line-through'})}>
 			{
 				ref.url ?
 					<a title={(ref.branchExists ? ref.label : 'Deleted')} href={ref.url}>
 						{ref.label}
 					</a> :
-					<span class="unknown-repo">unknown repository</span>
+					<span className="unknown-repo">unknown repository</span>
 			}
 		</span>
 	);
 }
 
-async function init() {
+async function init(): Promise<false | void> {
 	const elements = select.all('.js-issue-row');
 	if (elements.length === 0) {
 		return false;
@@ -93,12 +110,12 @@ async function init() {
 		let branches;
 		let {base, head} = normalizeBranchInfo(data.repository[PR.id]);
 
-		if (base.label === defaultBranch) {
-			base = null;
+		if (base!.label === defaultBranch) {
+			base = undefined;
 		}
 
-		if (head.owner !== ownerName) {
-			head = null;
+		if (head!.owner !== ownerName) {
+			head = undefined;
 		}
 
 		if (base && head) {
@@ -111,8 +128,8 @@ async function init() {
 			continue;
 		}
 
-		select('.text-small.text-gray', PR).append(
-			<span class="issue-meta-section d-inline-block">
+		select('.text-small.text-gray', PR)!.append(
+			<span className="issue-meta-section d-inline-block">
 				{openPullRequest()}
 				{' '}
 				{branches}
@@ -122,7 +139,9 @@ async function init() {
 }
 
 features.add({
-	id: 'pr-branches',
+	id: __featureName__,
+	description: 'Shows head and base branches in PR lists if they’re significant: The base branch is added when it’s not the repo’s default branch; The head branch is added when it’s from the same repo or the PR is by the current user.',
+	screenshot: 'https://user-images.githubusercontent.com/1402241/51428391-ae9ed500-1c35-11e9-8e54-6b6a424fede4.png',
 	include: [
 		features.isPRList
 	],

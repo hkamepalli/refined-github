@@ -1,11 +1,7 @@
-/*
-When navigating with next/previous in review mode, preserve whitespace option.
-*/
-
 import select from 'select-dom';
 import features from '../libs/features';
 
-function init() {
+function init(): false | void {
 	if (new URLSearchParams(location.search).get('w') !== '1') {
 		return false;
 	}
@@ -18,7 +14,9 @@ function init() {
 }
 
 features.add({
-	id: 'preserve-whitespace-option-in-nav',
+	id: __featureName__,
+	description: 'Preserves the "ignore whitespace" setting when navigating with Next/Previous in PR review mode.',
+	screenshot: false,
 	include: [
 		features.isRepo
 	],

@@ -1,3 +1,4 @@
+import './branch-buttons.css';
 import React from 'dom-chef';
 import select from 'select-dom';
 import compareVersions from 'tiny-version-compare';
@@ -7,12 +8,11 @@ import features from '../libs/features';
 import {isRepoRoot} from '../libs/page-detect';
 import {groupSiblings} from '../libs/group-buttons';
 import getDefaultBranch from '../libs/get-default-branch';
-import {getRepoURL, getOwnerAndRepo} from '../libs/utils';
+import {getRepoURL, getCurrentBranch, replaceBranch, getRepoGQL} from '../libs/utils';
 
-async function getTagLink() {
-	const {ownerName, repoName} = getOwnerAndRepo();
-	const {repository} = await api.v4(`{
-		repository(owner: "${ownerName}", name: "${repoName}") {
+async function getTagLink(): Promise<'' | HTMLAnchorElement> {
+	const {repository} = await api.v4(`
+		repository(${getRepoGQL()}) {
 			refs(first: 20, refPrefix: "refs/tags/", orderBy: {
 				field: TAG_COMMIT_DATE,
 				direction: DESC
@@ -22,25 +22,26 @@ async function getTagLink() {
 				}
 			}
 		}
-	}`);
+	`);
 
-	const tags = repository.refs.nodes.map(tag => tag.name);
+	const tags: string[] = repository.refs.nodes.map((tag: {name: string}) => tag.name);
 	if (tags.length === 0) {
 		return '';
 	}
 
 	// If all tags are plain versions, parse them,
 	// otherwise just use the latest.
-	let latestRelease;
+	let latestRelease: string;
 	if (tags.every(tag => /^[vr]?\d/.test(tag))) {
-		latestRelease = tags.sort(compareVersions).pop();
+		latestRelease = tags.sort(compareVersions).pop()!;
 	} else {
 		latestRelease = tags[0];
 	}
 
-	const link = <a class="btn btn-sm btn-outline tooltipped tooltipped-ne">{icons.tag()}</a>;
+	const link = <a className="btn btn-sm btn-outline tooltipped tooltipped-ne">{icons.tag()}</a> as unknown as HTMLAnchorElement;
 
-	const currentBranch = select('.branch-select-menu .css-truncate-target').textContent;
+	const currentBranch = getCurrentBranch();
+
 	if (currentBranch === latestRelease) {
 		link.classList.add('disabled');
 		link.setAttribute('aria-label', 'You’re on the latest release');
@@ -48,21 +49,19 @@ async function getTagLink() {
 		if (isRepoRoot()) {
 			link.href = `/${getRepoURL()}/tree/${latestRelease}`;
 		} else {
-			const urlParts = location.pathname.split('/');
-			urlParts[4] = latestRelease; // Change ref of current blob/tree
-			link.href = urlParts.join('/');
+			link.href = replaceBranch(currentBranch, latestRelease);
 		}
 
 		link.setAttribute('aria-label', 'Visit the latest release');
-		link.append(' ', <span class="css-truncate-target">{latestRelease}</span>);
+		link.append(' ', <span className="css-truncate-target">{latestRelease}</span>);
 	}
 
 	return link;
 }
 
-async function getDefaultBranchLink() {
+async function getDefaultBranchLink(): Promise<HTMLElement | undefined> {
 	const defaultBranch = await getDefaultBranch();
-	const currentBranch = select('[data-hotkey="w"] span').textContent;
+	const currentBranch = getCurrentBranch();
 
 	// Don't show the button if we’re already on the default branch
 	if (defaultBranch === undefined || defaultBranch === currentBranch) {
@@ -73,14 +72,12 @@ async function getDefaultBranchLink() {
 	if (isRepoRoot()) {
 		url = `/${getRepoURL()}`;
 	} else {
-		const urlParts = location.pathname.split('/');
-		urlParts[4] = defaultBranch; // Change branch of current blob/tree
-		url = urlParts.join('/');
+		url = replaceBranch(currentBranch, defaultBranch);
 	}
 
 	return (
 		<a
-			class="btn btn-sm btn-outline tooltipped tooltipped-ne"
+			className="btn btn-sm btn-outline tooltipped tooltipped-ne"
 			href={url}
 			aria-label="Visit the default branch">
 			{icons.branch()}
@@ -90,7 +87,7 @@ async function getDefaultBranchLink() {
 	);
 }
 
-async function init() {
+async function init(): Promise<false | void> {
 	const breadcrumbs = select('.breadcrumb');
 	if (!breadcrumbs) {
 		return false;
@@ -102,7 +99,7 @@ async function init() {
 	]);
 
 	const wrapper = (
-		<div class="rgh-branch-buttons">
+		<div className="rgh-branch-buttons ml-2">
 			{defaultLink}
 			{tagLink}
 		</div>
@@ -113,14 +110,17 @@ async function init() {
 	}
 
 	if (wrapper.children.length > 1) {
-		groupSiblings(wrapper.firstElementChild);
+		groupSiblings(wrapper.firstElementChild!);
 	}
 }
 
 features.add({
-	id: 'branch-buttons',
+	id: __featureName__,
+	description: 'Adds links to the default branch and to the latest version tag.',
+	screenshot: 'https://user-images.githubusercontent.com/1402241/38107328-ccb3fb46-33bb-11e8-9654-23a6410943cc.png',
 	include: [
-		features.isRepo
+		features.isRepoTree,
+		features.isSingleFile
 	],
 	load: features.onAjaxedPages,
 	init

@@ -1,4 +1,4 @@
-/* eslint-disable unicorn/prefer-starts-ends-with */
+/* eslint-disable unicorn/prefer-starts-ends-with, @typescript-eslint/prefer-string-starts-ends-with */
 /* The tested var might not be a string */
 
 import select from 'select-dom';
@@ -9,13 +9,13 @@ export const is404 = (): boolean => document.title === 'Page not found · GitHub
 
 export const is500 = (): boolean => document.title === 'Server Error · GitHub' || document.title === 'Unicorn! · GitHub';
 
-export const isBlame = (): boolean => /^blame\//.test(getRepoPath());
+export const isBlame = (): boolean => /^blame\//.test(getRepoPath()!);
 
 export const isCommit = (): boolean => isSingleCommit() || isPRCommit();
 
-export const isCommitList = (): boolean => /^commits\//.test(getRepoPath());
+export const isCommitList = (): boolean => /^commits\//.test(getRepoPath()!);
 
-export const isCompare = (): boolean => /^compare/.test(getRepoPath());
+export const isCompare = (): boolean => /^compare/.test(getRepoPath()!);
 
 export const isDashboard = (): boolean => !isGist() && /^$|^(orgs[/][^/]+[/])?dashboard([/]|$)/.test(getCleanPathname());
 
@@ -23,23 +23,25 @@ export const isEnterprise = (): boolean => location.hostname !== 'github.com' &&
 
 export const isGist = (): boolean => location.hostname.startsWith('gist.') || location.pathname.startsWith('gist/');
 
-export const isGlobalDiscussionList = (): boolean => location.pathname === '/issues' || location.pathname === '/pulls';
+export const isGlobalDiscussionList = (): boolean => ['issues', 'pulls'].includes(location.pathname.split('/', 2)[1]);
 
 export const isGlobalSearchResults = (): boolean => location.pathname === '/search' && new URLSearchParams(location.search).get('q') !== null;
 
-export const isIssue = (): boolean => /^issues\/\d+/.test(getRepoPath());
+export const isIssue = (): boolean => /^issues\/\d+/.test(getRepoPath()!);
 
 export const isDiscussionList = (): boolean => isGlobalDiscussionList() || isRepoDiscussionList();
 
-export const isLabel = (): boolean => /^labels\/\w+/.test(getRepoPath());
+export const isLabel = (): boolean => /^labels\/\w+/.test(getRepoPath()!);
 
-export const isLabelList = (): boolean => /^labels\/?(((?=\?).*)|$)/.test(getRepoPath());
+export const isLabelList = (): boolean => /^labels\/?(((?=\?).*)|$)/.test(getRepoPath()!);
 
-export const isMilestone = (): boolean => /^milestone\/\d+/.test(getRepoPath());
+export const isMilestone = (): boolean => /^milestone\/\d+/.test(getRepoPath()!);
 
 export const isMilestoneList = (): boolean => getRepoPath() === 'milestones';
 
-export const isNewIssue = (): boolean => /^issues\/new/.test(getRepoPath());
+export const isNewIssue = (): boolean => /^issues\/new/.test(getRepoPath()!);
+
+export const isNewRelease = (): boolean => /^releases\/new/.test(getRepoPath()!);
 
 export const isNotifications = (): boolean => /^([^/]+[/][^/]+\/)?notifications/.test(getCleanPathname());
 
@@ -52,23 +54,25 @@ export const isOwnUserProfile = (): boolean => getCleanPathname() === getUsernam
 // If there's a Report Abuse link, we're not part of the org
 export const isOwnOrganizationProfile = (): boolean => isOrganizationProfile() && !select.exists('[href*="contact/report-abuse?report="]');
 
-export const isProject = (): boolean => /^projects\/\d+/.test(getRepoPath());
+export const isProject = (): boolean => /^projects\/\d+/.test(getRepoPath()!);
 
-export const isPR = (): boolean => /^pull\/\d+/.test(getRepoPath());
+export const isPR = (): boolean => /^pull\/\d+/.test(getRepoPath()!);
 
-export const isConflict = (): boolean => /^pull\/\d+\/conflicts/.test(getRepoPath());
+export const isConflict = (): boolean => /^pull\/\d+\/conflicts/.test(getRepoPath()!);
 
 export const isPRList = (): boolean => getRepoPath() === 'pulls';
 
-export const isPRCommit = (): boolean => /^pull\/\d+\/commits\/[0-9a-f]{5,40}/.test(getRepoPath());
+export const isPRCommit = (): boolean => /^pull\/\d+\/commits\/[0-9a-f]{5,40}/.test(getRepoPath()!);
 
-export const isPRConversation = (): boolean => /^pull\/\d+$/.test(getRepoPath());
+export const isPRConversation = (): boolean => /^pull\/\d+$/.test(getRepoPath()!);
 
-export const isPRFiles = (): boolean => /^pull\/\d+\/files/.test(getRepoPath());
+export const isPRFiles = (): boolean => /^pull\/\d+\/files/.test(getRepoPath()!);
 
 export const isQuickPR = (): boolean => isCompare() && /[?&]quick_pull=1(&|$)/.test(location.search);
 
-export const isReleasesOrTags = (): boolean => /^(releases|tags)/.test(getRepoPath());
+export const isReleasesOrTags = (): boolean => /^(releases|tags)/.test(getRepoPath()!);
+
+export const isEditingFile = (): boolean => /^edit/.test(getRepoPath()!);
 
 export const isRepo = (): boolean => /^[^/]+\/[^/]+/.test(getCleanPathname()) &&
 	!reservedNames.includes(getOwnerAndRepo().ownerName) &&
@@ -77,23 +81,29 @@ export const isRepo = (): boolean => /^[^/]+\/[^/]+/.test(getCleanPathname()) &&
 	!isGist() &&
 	!isRepoSearch();
 
-export const isRepoDiscussionList = (): boolean => /^(issues$|pulls$|labels\/)/.test(getRepoPath());
+export const isRepoDiscussionList = (): boolean =>
+	/^(issues|pulls)($|\/$|\/(?!\d+|new))/.test(getRepoPath()!) || // `issues/fregante` is a list but `issues/1` isn't
+	/^labels\/.+/.test(getRepoPath()!);
 
-export const isRepoRoot = (): boolean => /^(tree[/][^/]+)?$/.test(getRepoPath());
+export const isRepoRoot = (): boolean => /^(tree[/][^/]+)?$/.test(getRepoPath()!);
 
 export const isRepoSearch = (): boolean => location.pathname.slice(1).split('/')[2] === 'search';
 
-export const isRepoSettings = (): boolean => /^settings/.test(getRepoPath());
+export const isRepoSettings = (): boolean => /^settings/.test(getRepoPath()!);
 
-export const isRepoTree = (): boolean => isRepoRoot() || /^tree\//.test(getRepoPath());
+export const isRepoTree = (): boolean => isRepoRoot() || /^tree\//.test(getRepoPath()!);
 
-export const isSingleCommit = (): boolean => /^commit\/[0-9a-f]{5,40}/.test(getRepoPath());
+export const isRepoWithAccess = (): boolean => isRepo() && select.exists('.reponav-item[href$="/settings"]');
 
-export const isSingleFile = (): boolean => /^blob\//.test(getRepoPath());
+export const isSingleCommit = (): boolean => /^commit\/[0-9a-f]{5,40}/.test(getRepoPath()!);
+
+export const isSingleFile = (): boolean => /^blob\//.test(getRepoPath()!);
 
 export const isTrending = (): boolean => location.pathname === '/trending' || location.pathname.startsWith('/trending/');
 
 export const isUserProfile = (): boolean => select.exists('.user-profile-nav');
+
+export const isSingleTagPage = (): boolean => /^(releases\/tag)/.test(getRepoPath()!);
 
 export const hasComments = (): boolean =>
 	isPR() ||
@@ -105,3 +115,11 @@ export const hasRichTextEditor = (): boolean =>
 	hasComments() ||
 	isNewIssue() ||
 	isCompare();
+
+export const hasCode = (): boolean => // Static code, not the editor
+	hasComments() ||
+	isRepoTree() || // Readme files
+	isSingleFile() ||
+	isGist() ||
+	isCompare() ||
+	isBlame();

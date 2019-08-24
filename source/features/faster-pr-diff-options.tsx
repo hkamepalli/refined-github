@@ -3,14 +3,14 @@ import select from 'select-dom';
 import * as icons from '../libs/icons';
 import features from '../libs/features';
 
-function createDiffStyleToggle() {
+function createDiffStyleToggle(): DocumentFragment {
 	const params = new URLSearchParams(location.search);
 	const isUnified = select.exists([
 		'[value="unified"][checked]', // Form in PR
 		'.table-of-contents .selected[href$=unified]' // Link in single commit
 	].join());
 
-	const makeLink = (type, icon, selected) => {
+	const makeLink = (type: string, icon: Element, selected: boolean): HTMLElement => {
 		params.set('diff', type);
 		return <a
 			className={`btn btn-sm BtnGroup-item tooltipped tooltipped-s ${selected ? 'selected' : ''}`}
@@ -26,7 +26,7 @@ function createDiffStyleToggle() {
 	</>;
 }
 
-function createWhitespaceButton() {
+function createWhitespaceButton(): HTMLElement {
 	const searchParams = new URLSearchParams(location.search);
 	const isHidingWhitespace = searchParams.get('w') === '1';
 
@@ -46,7 +46,7 @@ function createWhitespaceButton() {
 	);
 }
 
-function wrap(...elements) {
+function wrap(...elements: Node[]): DocumentFragment {
 	if (features.isSingleCommit()) {
 		return <div className="float-right">
 			{...elements.map(element => <div className="ml-3 BtnGroup">{element}</div>)}
@@ -56,32 +56,49 @@ function wrap(...elements) {
 	return <>{elements.map(element => <div className="diffbar-item">{element}</div>)}</>;
 }
 
-function init() {
+function init(): false | void {
 	const container = select([
-		'.table-of-contents.Details .BtnGroup', // In single commit view
-		'.pr-review-tools > .diffbar-item' // In review view
+		'#toc', // In single commit view
+		'.pr-review-tools' // In review view
 	].join(','));
-
 	if (!container) {
 		return false;
 	}
 
-	container.replaceWith(
+	container.prepend(
 		wrap(
 			createDiffStyleToggle(),
 			createWhitespaceButton()
 		)
 	);
 
-	// Make space for the new button by removing "Changes from" #655
-	const uselessCopy = select('[data-hotkey="c"]');
-	if (uselessCopy) {
-		uselessCopy.firstChild.remove();
+	// Trim title
+	const prTitle = select('.pr-toolbar .js-issue-title');
+	if (prTitle && select.exists('.pr-toolbar progress-bar')) { // Only review view has progress-bar
+		prTitle.style.maxWidth = '24em';
+		prTitle.title = prTitle.textContent!;
+	}
+
+	// Remove previous options UI
+	const singleCommitUI = select('[data-ga-load="Diff, view, Viewed Split Diff"]');
+	if (singleCommitUI) {
+		singleCommitUI.remove();
+		return;
+	}
+
+	const prUI = select('.js-diff-settings');
+	if (prUI) {
+		prUI.closest('details')!.remove();
+
+		// Make space for the new button by removing "Changes from" #655
+		select('[data-hotkey="c"]')!.firstChild!.remove();
 	}
 }
 
 features.add({
-	id: 'faster-pr-diff-options',
+	id: __featureName__,
+	description: 'Adds one-click buttons to change diff style and to ignore the whitespace and a keyboard shortcut to ignore the whitespace: `d` `w`.',
+	screenshot: 'https://user-images.githubusercontent.com/1402241/54178764-d1c96080-44d1-11e9-889c-734ffd2a602d.png',
 	include: [
 		features.isPRFiles,
 		features.isCommit

@@ -1,7 +1,7 @@
 import select from 'select-dom';
 import features from '../libs/features';
 
-function init() {
+function init(): void {
 	// There are two buttons: unstar and star
 	for (const button of select.all('.js-social-form > button')) {
 		button.setAttribute('data-hotkey', 'g s');
@@ -9,7 +9,9 @@ function init() {
 }
 
 features.add({
-	id: 'star-repo-hotkey',
+	id: __featureName__,
+	description: 'Adds a keyboard shortcut to star/unstar the current repo: `g` `s`.',
+	screenshot: false,
 	include: [
 		features.isRepo
 	],

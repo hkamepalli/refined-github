@@ -15,27 +15,33 @@ a Promise that resolves into an object.
 If the response body is empty, you'll receive an object like {status: 200}
 
 The second argument is an options object,
-it lets you define accept a 404 error code as a valid response, like:
+it lets you define accept error HTTP codes as a valid response, like:
 
 {
-	accept404: true
+	ignoreHTTPStatus: true
 }
 
 so the call will not throw an error but it will return as usual.
  */
 
-import OptionsSync from 'webext-options-sync';
+import mem from 'mem';
+import {JsonObject} from 'type-fest';
+import optionsStorage from '../options-storage';
 
-type FetchStrategy = typeof fetch3 | typeof fetch4;
+type JsonError = {
+	message: string;
+};
 
-export interface FetchOptions {
-	accept404: boolean;
+interface APIResponse {
+	message?: string;
 }
 
-export const v3 = (query: string, options?: FetchOptions) => call(fetch3, query, options);
-export const v4 = (query: string, options?: FetchOptions) => call(fetch4, query, options);
+interface GraphQLResponse extends APIResponse {
+	data?: JsonObject;
+	errors?: JsonError[];
+}
 
-export const escapeKey = (value: string) => '_' + value.replace(/[./-]/g, '_');
+export const escapeKey = (value: string): string => '_' + value.replace(/[ ./-]/g, '_');
 
 export class RefinedGitHubAPIError extends Error {
 	constructor(...messages: string[]) {
@@ -43,7 +49,8 @@ export class RefinedGitHubAPIError extends Error {
 	}
 }
 
-const cache = new Map<string, AnyObject>();
+const settings = optionsStorage.getAll();
+
 const api3 = location.hostname === 'github.com' ?
 	'https://api.github.com/' :
 	`${location.origin}/api/v3/`;
@@ -51,55 +58,108 @@ const api4 = location.hostname === 'github.com' ?
 	'https://api.github.com/graphql' :
 	`${location.origin}/api/graphql`;
 
-function fetch3(query: string, personalToken: string) {
-	const headers: HeadersInit = {
-		'User-Agent': 'Refined GitHub',
-		Accept: 'application/vnd.github.v3+json'
-	};
-	if (personalToken) {
-		headers.Authorization = `token ${personalToken}`;
-	}
-
-	return fetch(api3 + query, {headers});
+interface GHRestApiOptions {
+	ignoreHTTPStatus?: boolean;
+	method?: 'GET' | 'POST' | 'PUT';
+	body?: undefined | JsonObject;
+	headers?: HeadersInit;
 }
 
-function fetch4(query: string, personalToken: string) {
+interface GHGraphQLApiOptions {
+	allowErrors?: boolean;
+}
+
+const v3defaults: GHRestApiOptions = {
+	ignoreHTTPStatus: false,
+	method: 'GET',
+	body: undefined
+};
+
+const v4defaults: GHGraphQLApiOptions = {
+	allowErrors: false
+};
+
+export const v3 = mem(async (
+	query: string,
+	options: GHRestApiOptions = v3defaults
+): Promise<AnyObject> => {
+	const {ignoreHTTPStatus, method, body, headers} = {...v3defaults, ...options};
+	const {personalToken} = await settings;
+
+	const response = await fetch(api3 + query, {
+		method,
+		body: body && JSON.stringify(body),
+		headers: {
+			'User-Agent': 'Refined GitHub',
+			Accept: 'application/vnd.github.v3+json',
+			...headers,
+			...(personalToken ? {Authorization: `token ${personalToken}`} : {})
+		}
+	});
+	const textContent = await response.text();
+
+	// The response might just be a 200 or 404, it's the REST equivalent of `boolean`
+	const apiResponse: JsonObject = textContent.length > 0 ? JSON.parse(textContent) : {};
+
+	if (response.ok || ignoreHTTPStatus) {
+		return Object.assign(apiResponse, {
+			status: response.status,
+			ok: response.ok
+		});
+	}
+
+	throw await getError(apiResponse);
+});
+
+export const v4 = mem(async (
+	query: string,
+	options: GHGraphQLApiOptions = v4defaults
+): Promise<AnyObject> => {
+	const {personalToken} = await settings;
+
+	if (/^(query )?{/.test(query.trimStart())) {
+		throw new TypeError('`query` should only be what’s inside \'query {...}\', like \'user(login: "foo") { name }\', but is \n' + query);
+	}
+
 	if (!personalToken) {
 		throw new Error('Personal token required for this feature');
 	}
 
-	return fetch(api4, {
+	const response = await fetch(api4, {
 		headers: {
 			'User-Agent': 'Refined GitHub',
 			Authorization: `bearer ${personalToken}`
 		},
 		method: 'POST',
-		body: JSON.stringify({query})
+		body: JSON.stringify({query: `{${query}}`})
 	});
-}
 
-// Main function: handles cache, options, errors
-async function call(fetch: FetchStrategy, query: string, options: FetchOptions = {accept404: false}) {
-	if (cache.has(query)) {
-		return cache.get(query);
-	}
+	const apiResponse: GraphQLResponse = await response.json();
 
-	const {personalToken} = await new OptionsSync().getAll();
-	const response = await fetch(query, personalToken as string);
-	const content = await response.text();
+	const {
+		data = {},
+		errors = []
+	} = apiResponse;
 
-	const result: { data?: AnyObject; errors?: Error[]; message?: string;status?: number} = content.length > 0 ? JSON.parse(content) : {status: response.status};
-	const {data, errors = [], message = ''} = result;
-
-	if (errors.length > 0) {
+	if (errors.length > 0 && !options.allowErrors) {
 		throw Object.assign(
-			new RefinedGitHubAPIError('GraphQL:', ...errors.map(e => e.message)),
-			result
+			new RefinedGitHubAPIError('GraphQL:', ...errors.map(error => error.message)),
+			apiResponse
 		);
 	}
 
-	if (message.includes('API rate limit exceeded')) {
-		throw new RefinedGitHubAPIError(
+	if (response.ok) {
+		return data;
+	}
+
+	throw await getError(apiResponse as JsonObject);
+});
+
+async function getError(apiResponse: JsonObject): Promise<RefinedGitHubAPIError> {
+	const {personalToken} = await settings;
+
+	if (typeof apiResponse.message === 'string' && apiResponse.message.includes('API rate limit exceeded')) {
+		return new RefinedGitHubAPIError(
 			'Rate limit exceeded.',
 			personalToken ?
 				'It may be time for a walk! 🍃 🌞' :
@@ -107,23 +167,17 @@ async function call(fetch: FetchStrategy, query: string, options: FetchOptions =
 		);
 	}
 
-	if (message === 'Bad credentials') {
-		throw new RefinedGitHubAPIError(
+	if (apiResponse.message === 'Bad credentials') {
+		return new RefinedGitHubAPIError(
 			'The token seems to be incorrect or expired. Update it in the options.'
 		);
 	}
 
-	if (response.ok || (options.accept404 === true && response.status === 404)) {
-		const output = fetch === fetch4 ? data : result;
-		cache.set(query, output);
-		return output;
-	}
-
-	throw new RefinedGitHubAPIError(
+	return new RefinedGitHubAPIError(
 		'Unable to fetch.',
 		personalToken ?
 			'Ensure that your token has access to this repo.' :
 			'Maybe adding a token in the options will fix this issue.',
-		JSON.stringify(result, null, '\t') // Beautify
+		JSON.stringify(apiResponse, null, '\t') // Beautify
 	);
 }

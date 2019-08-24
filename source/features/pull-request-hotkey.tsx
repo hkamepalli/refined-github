@@ -1,9 +1,9 @@
 import select from 'select-dom';
 import features from '../libs/features';
 
-function init() {
+function init(): void {
 	const tabs = select.all('.tabnav-pr .tabnav-tab');
-	const selectedIndex = tabs.indexOf(select('.tabnav-pr .selected'));
+	const selectedIndex = tabs.indexOf(select('.tabnav-pr .selected')!);
 	const lastTab = tabs.length - 1;
 
 	for (const [index, tab] of tabs.entries()) {
@@ -19,7 +19,9 @@ function init() {
 }
 
 features.add({
-	id: 'pull-request-hotkey',
+	id: __featureName__,
+	description: 'Adds keyboard shortcuts to cycle through PR tabs: `g` `←` and `g` `→`, or `g` `1`, `g` `2`, `g` `3` and `g` `4`',
+	screenshot: false,
 	include: [
 		features.isPR
 	],

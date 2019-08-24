@@ -1,10 +1,7 @@
-/*
-Hide other users starring/forking your repos
-*/
 import select from 'select-dom';
+import elementReady from 'element-ready';
 import features from '../libs/features';
 import {getUsername} from '../libs/utils';
-import {safeElementReady} from '../libs/dom-utils';
 
 const observer = new MutationObserver(([{addedNodes}]) => {
 	// Remove events from dashboard
@@ -16,18 +13,20 @@ const observer = new MutationObserver(([{addedNodes}]) => {
 
 	// Observe the new ajaxed-in containers
 	for (const node of addedNodes) {
-		if ((node as Element).tagName === 'DIV') {
+		if (node instanceof HTMLDivElement) {
 			observer.observe(node, {childList: true});
 		}
 	}
 });
 
-async function init() {
-	observer.observe(await safeElementReady('#dashboard .news'), {childList: true});
+async function init(): Promise<void> {
+	observer.observe((await elementReady('#dashboard .news'))!, {childList: true});
 }
 
 features.add({
-	id: 'hide-own-stars',
+	id: __featureName__,
+	description: 'Hides "starred" events for your own repos on the newsfeed.',
+	screenshot: false,
 	include: [
 		features.isDashboard
 	],

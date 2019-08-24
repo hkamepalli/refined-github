@@ -1,14 +1,20 @@
+import './resolve-conflicts.css';
 import React from 'dom-chef';
 import elementReady from 'element-ready';
 import features from '../libs/features';
 
-async function init() {
-	await elementReady('.CodeMirror'); // *Not* safeElementReady
+async function init(): Promise<void> {
+	await elementReady('.CodeMirror', {
+		stopOnDomReady: false
+	});
+
 	document.head.append(<script src={browser.runtime.getURL('resolve-conflicts.js')}/>);
 }
 
 features.add({
-	id: 'resolve-conflicts',
+	id: __featureName__,
+	description: 'Fix merge conflicts in a click',
+	screenshot: false,
 	include: [
 		features.isConflict
 	],

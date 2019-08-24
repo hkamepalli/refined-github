@@ -1,46 +1,16 @@
-import OptionsSync from 'webext-options-sync';
-import domainPermissionToggle from 'webext-domain-permission-toggle';
-import dynamicContentScripts from 'webext-dynamic-content-scripts';
-import './libs/cache';
+import 'webext-dynamic-content-scripts';
+import addDomainPermissionToggle from 'webext-domain-permission-toggle';
+import './options-storage';
 
-// Define defaults
-new OptionsSync().define({
-	defaults: {
-		disabledFeatures: '',
-		customCSS: '',
-		personalToken: '',
-		logging: false
-	},
-	migrations: [
-		options => {
-			options.disabledFeatures = (options.disabledFeatures as string)
-				.replace('milestone-navigation', '') // #1767
-				.replace('op-labels', '') // #1776
-				.replace('delete-fork-link', '') // #1791
-				.replace('exclude-filter-shortcut', '') // #1831
-				.replace('diff-view-without-whitespace-option', 'faster-pr-diff-options') // #1799
-				.replace('make-headers-sticky', '') // #1863
-				.replace('jump-to-bottom', '') // #1879
-				.replace('hide-readme-header', '') // #1883
-				.replace(/commented-menu-item|yours-menu-item/, 'global-discussion-list-filters') // #1883
-			; // eslint-disable-line semi-style
-		},
-		OptionsSync.migrations.removeUnused
-	]
-});
-
-browser.runtime.onMessage.addListener(async message => {
-	if (!message || message.action !== 'openAllInTabs') {
-		return;
-	}
-
-	const [currentTab] = await browser.tabs.query({currentWindow: true, active: true});
-	for (const [i, url] of message.urls.entries()) {
-		browser.tabs.create({
-			url,
-			index: currentTab.index + i + 1,
-			active: false
-		});
+browser.runtime.onMessage.addListener(async (message, {tab}) => {
+	if (message && Array.isArray(message.openUrls)) {
+		for (const [i, url] of (message.openUrls as string[]).entries()) {
+			browser.tabs.create({
+				url,
+				index: tab!.index + i + 1,
+				active: false
+			});
+		}
 	}
 });
 
@@ -54,8 +24,8 @@ browser.browserAction.onClicked.addListener(() => {
 browser.runtime.onInstalled.addListener(async ({reason}) => {
 	// Only notify on install
 	if (reason === 'install') {
-		const {installType} = await browser.management.getSelf();
-		if (installType === 'development') {
+		const self = await browser.management.getSelf();
+		if (self && self.installType === 'development') {
 			return;
 		}
 
@@ -67,5 +37,4 @@ browser.runtime.onInstalled.addListener(async ({reason}) => {
 });
 
 // GitHub Enterprise support
-dynamicContentScripts.addToFutureTabs();
-domainPermissionToggle.addContextMenu();
+addDomainPermissionToggle();

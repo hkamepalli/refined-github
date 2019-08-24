@@ -1,8 +1,13 @@
-import test from 'ava';
+import test, {ExecutionContext} from 'ava';
 import './fixtures/globals';
 import * as pageDetect from '../source/libs/page-detect';
 
-function urlMatcherMacro(t, detectFn, shouldMatch = [], shouldNotMatch = []) {
+function urlMatcherMacro(
+	t: ExecutionContext,
+	detectFn: (url: string) => boolean,
+	shouldMatch: string[] = [],
+	shouldNotMatch: string[] = []
+): void {
 	for (const url of shouldMatch) {
 		location.href = url;
 		t.true(detectFn(url));
@@ -148,22 +153,32 @@ test('isIssue', urlMatcherMacro, pageDetect.isIssue, [
 test('isRepoDiscussionList', urlMatcherMacro, pageDetect.isRepoDiscussionList, [
 	'http://github.com/sindresorhus/ava/issues',
 	'https://github.com/sindresorhus/refined-github/pulls',
+	'https://github.com/sindresorhus/refined-github/pulls/',
+	'https://github.com/sindresorhus/refined-github/pulls/fregante',
+	'https://github.com/sindresorhus/refined-github/issues/fregante',
 	'https://github.com/sindresorhus/refined-github/labels/Priority%3A%20critical',
 	'https://github.com/sindresorhus/refined-github/issues?q=is%3Aclosed+sort%3Aupdated-desc'
 ], [
 	'http://github.com/sindresorhus/ava',
 	'https://github.com',
+	'https://github.com/sindresorhus/refined-github/issues/new',
 	'https://github.com/sindresorhus/refined-github/issues/170',
 	'https://github.com/sindresorhus/refined-github/pull/148',
 	'http://github.com/sindresorhus/issues',
-	'https://github.com/wildlifela/carmichael-lynch-2018/labels'
+	'https://github.com/sindresorhus/refined-github/labels',
+	'https://github.com/sindresorhus/refined-github/labels/'
 ]);
 
 test('isGlobalDiscussionList', urlMatcherMacro, pageDetect.isGlobalDiscussionList, [
 	'https://github.com/issues',
+	'https://github.com/issues?q=is%3Apr+is%3Aopen',
+	'https://github.com/issues/assigned',
+	'https://github.com/issues/mentioned',
 	'https://github.com/pulls',
 	'https://github.com/pulls?q=issues',
-	'https://github.com/issues?q=is%3Apr+is%3Aopen'
+	'https://github.com/pulls/assigned',
+	'https://github.com/pulls/mentioned',
+	'https://github.com/pulls/review-requested'
 ], [
 	'https://github.com/issuesorter',
 	'https://github.com/sindresorhus/refined-github/issues',
@@ -188,9 +203,19 @@ test('isMilestone', urlMatcherMacro, pageDetect.isMilestone, [
 test('isNewIssue', urlMatcherMacro, pageDetect.isNewIssue, [
 	'https://github.com/sindresorhus/refined-github/issues/new'
 ], [
-	'http://github.com/sindresorhus/ava',
+	'http://github.com/issues/new',
 	'https://github.com',
-	'https://github.com/sindresorhus/refined-github/issues'
+	'https://github.com/sindresorhus/refined-github/issues',
+	'https://github.com/sindresorhus/refined-github/blob/issues/new'
+]);
+
+test('isNewRelease', urlMatcherMacro, pageDetect.isNewRelease, [
+	'https://github.com/sindresorhus/refined-github/releases/new'
+], [
+	'http://github.com/releases/new',
+	'https://github.com',
+	'https://github.com/sindresorhus/refined-github/releases',
+	'https://github.com/sindresorhus/refined-github/blob/releases/new'
 ]);
 
 test('isNotifications', urlMatcherMacro, pageDetect.isNotifications, [
@@ -370,4 +395,26 @@ test('isRepoSearch', urlMatcherMacro, pageDetect.isRepoSearch, [
 	'https://github.com/sindresorhus/refined-github',
 	'https://github.com/sindresorhus/search',
 	'https://github.com/search'
+]);
+
+test('isSingleTagPage', urlMatcherMacro, pageDetect.isSingleTagPage, [
+	'https://github.com/sindresorhus/refined-github/releases/tag/v1.0.0-beta.4',
+	'https://github.com/sindresorhus/refined-github/releases/tag/0.2.1'
+], [
+	'https://github.com/sindresorhus/refined-github/tags',
+	'https://github.com/sindresorhus/refined-github/releases',
+	'https://github.com/sindresorhus/refined-github',
+	'https://github.com/sindresorhus/refined-github/graphs'
+]);
+
+test('isEditingFile', urlMatcherMacro, pageDetect.isEditingFile, [
+	'https://github.com/sindresorhus/refined-github/edit/master/readme.md',
+	'https://github.com/sindresorhus/refined-github/edit/ghe-injection/source/background.ts'
+], [
+	'https://github.com/sindresorhus/refined-github',
+	'https://github.com/sindresorhus/refined-github/pulls',
+	'https://github.com/edit',
+	'https://github.com/orgs/edit/dashboard',
+	'https://github.com/sindresorhus/edit',
+	'https://github.com/sindresorhus/refined-github/blob/master/edit.txt'
 ]);

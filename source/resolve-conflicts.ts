@@ -2,16 +2,14 @@
 
 interface CodeMirrorInstance extends CodeMirror.Editor, CodeMirror.Doc {}
 
-// eslint-disable-next-line @typescript-eslint/no-namespace, @typescript-eslint/prefer-namespace-keyword
-declare module CodeMirror {
+declare namespace CodeMirror {
 	interface LineHandle {
 		widgets: unknown[];
 		lineNo(): number;
 	}
 }
 
-const select: typeof document.querySelector = document.querySelector.bind(document);
-const editor: CodeMirrorInstance = select<any>('.CodeMirror').CodeMirror;
+const editor: CodeMirrorInstance = document.querySelector<any>('.CodeMirror').CodeMirror;
 
 // Event fired when each file is loaded
 editor.on('swapDoc', () => setTimeout(addWidget, 1));
@@ -26,17 +24,17 @@ editor.on('changes', (_, [firstChange]) => {
 	}
 });
 
-function getLineNumber(lineChild: Element) {
+function getLineNumber(lineChild: Element): number {
 	return Number(
 		lineChild
-			.closest('.CodeMirror-gutter-wrapper, .CodeMirror-linewidget')
-			.parentElement
-			.querySelector('.CodeMirror-linenumber')
+			.closest('.CodeMirror-gutter-wrapper, .CodeMirror-linewidget')!
+			.parentElement!
+			.querySelector('.CodeMirror-linenumber')!
 			.textContent
 	) - 1;
 }
 
-function appendLineInfo(lineHandle: CodeMirror.LineHandle, text: string) {
+function appendLineInfo(lineHandle: CodeMirror.LineHandle, text: string): void {
 	// Only append text if it's not already there
 	if (!lineHandle.text.includes(text)) {
 		const line = lineHandle.lineNo();
@@ -46,7 +44,7 @@ function appendLineInfo(lineHandle: CodeMirror.LineHandle, text: string) {
 }
 
 // Create and add widget if not already in the document
-function addWidget() {
+function addWidget(): void {
 	editor.eachLine(lineHandle => {
 		if (lineHandle.widgets) {
 			return;
@@ -66,7 +64,7 @@ function addWidget() {
 	});
 }
 
-function createButton(branch, title?: string) {
+function createButton(branch: string, title?: string): HTMLButtonElement {
 	const link = document.createElement('button');
 	link.type = 'button';
 	link.className = 'btn-link';
@@ -78,7 +76,7 @@ function createButton(branch, title?: string) {
 }
 
 // Create and return conflict resolve widget for specific conflict
-function newWidget() {
+function newWidget(): HTMLDivElement {
 	const widget = document.createElement('div');
 	widget.style.fontWeight = 'bold';
 	widget.append(
@@ -92,10 +90,10 @@ function newWidget() {
 }
 
 // Accept one or both of branches and remove unnecessary lines
-function acceptBranch(branch: string, line: number) {
+function acceptBranch(branch: string, line: number): void {
 	let deleteNextLine = false;
 
-	const linesToRemove = [];
+	const linesToRemove: number[] = [];
 	editor.eachLine(line, Infinity, lineHandle => {
 		// Determine whether to remove the following line(s)
 		if (lineHandle.text.startsWith('<<<<<<<')) {
@@ -109,9 +107,7 @@ function acceptBranch(branch: string, line: number) {
 			linesToRemove.push(lineHandle.lineNo());
 		}
 
-		if (lineHandle.text.startsWith('>>>>>>>')) {
-			return true; // End loop
-		}
+		return lineHandle.text.startsWith('>>>>>>>'); // `true` ends loop
 	});
 
 	// Delete all lines at once in a performant way

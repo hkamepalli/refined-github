@@ -1,65 +1,78 @@
 import select from 'select-dom';
-import delegate from 'delegate-it';
 import * as api from '../libs/api';
 import features from '../libs/features';
-import {getOwnerAndRepo, getDiscussionNumber, getOP} from '../libs/utils';
+import {getDiscussionNumber, getOP, getRepoGQL} from '../libs/utils';
+import onPrMergePanelOpen from '../libs/on-pr-merge-panel-open';
 
-let coAuthors;
+interface Author {
+	email: string;
+	name: string; // Used when the commit isn't linked to a GitHub user
+	user: {
+		name: string;
+		login: string;
+	};
+}
 
-async function fetchCoAuthoredData() {
-	const prNumber = getDiscussionNumber();
-	const {ownerName, repoName} = getOwnerAndRepo();
+let coAuthors: Author[];
 
-	const userInfo = await api.v4(
-		`{
-			repository(owner: "${ownerName}", name: "${repoName}") {
-				pullRequest(number: ${prNumber}) {
-					commits(first: 100) {
-						nodes {
-							commit {
-								author {
-									email
-									user {
-										login
-										name
-									}
+async function fetchCoAuthoredData(): Promise<Author[]> {
+	const userInfo = await api.v4(`
+		repository(${getRepoGQL()}) {
+			pullRequest(number: ${getDiscussionNumber()}) {
+				commits(first: 100) {
+					nodes {
+						commit {
+							author {
+								email
+								name
+								user {
+									login
+									name
 								}
 							}
 						}
 					}
 				}
 			}
-		}`
-	);
+		}
+	`);
 
-	return userInfo.repository.pullRequest.commits.nodes.map(node => node.commit.author);
+	return userInfo.repository.pullRequest.commits.nodes.map((node: AnyObject) => node.commit.author as Author);
 }
 
-function addCoAuthors() {
-	const field = select<HTMLTextAreaElement>('#merge_message_field');
+function addCoAuthors(): void {
+	const field = select<HTMLTextAreaElement>('#merge_message_field')!;
 	if (field.value.includes('Co-authored-by: ')) {
 		// Don't affect existing information
 		return;
 	}
 
 	const addendum = new Map();
-	for (const {email, user} of coAuthors) {
-		addendum.set(user.login, `Co-authored-by: ${user.name} <${email}>`);
+	for (const {email, user, name} of coAuthors) {
+		if (user) {
+			addendum.set(user.login, `Co-authored-by: ${user.name} <${email}>`);
+		} else {
+			addendum.set(name, `Co-authored-by: ${name} <${email}>`);
+		}
 	}
 
 	addendum.delete(getOP());
 
-	field.value += '\n\n' + [...addendum.values()].join('\n');
+	if (addendum.size > 0) {
+		field.value += '\n\n' + [...addendum.values()].join('\n');
+	}
 }
 
-async function init() {
+async function init(): Promise<void> {
 	coAuthors = await fetchCoAuthoredData();
 
-	delegate('.discussion-timeline-actions', '.merge-message [type=button]', 'click', addCoAuthors);
+	onPrMergePanelOpen(addCoAuthors);
 }
 
 features.add({
-	id: 'add-co-authored-by',
+	id: __featureName__,
+	description: 'Adds `co-authored-by` to the commit when merging PRs with multiple committers.',
+	screenshot: 'https://user-images.githubusercontent.com/1402241/51468821-71a42100-1da2-11e9-86aa-fc2a6a29da84.png',
 	include: [
 		features.isPRConversation
 	],

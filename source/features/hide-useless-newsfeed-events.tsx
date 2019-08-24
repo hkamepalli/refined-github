@@ -1,11 +1,14 @@
+import './hide-useless-newsfeed-events.css';
 import features from '../libs/features';
 
-function init() {
+function init(): void {
 	document.body.classList.add('rgh-no-useless-events');
 }
 
 features.add({
-	id: 'hide-useless-newsfeed-events',
+	id: __featureName__,
+	description: 'Hides inutile newsfeed events (commits, forks, new followers).',
+	screenshot: false,
 	include: [
 		features.isDashboard
 	],
