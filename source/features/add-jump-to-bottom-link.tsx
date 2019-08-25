@@ -20,7 +20,9 @@ function init() {
 }
 
 features.add({
-	id: 'add-jump-to-bottom-link',
+	id: __featureName__,
+	description: 'Adds a hyperlink at the top to jump to the bottom of the page',
+	screenshot: '',
 	include: [
 		features.isIssue,
 		features.isPRConversation
